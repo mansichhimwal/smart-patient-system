@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Patient</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+<h2>Patient Panel</h2>
+
+<input id="pid" placeholder="Enter Patient ID">
+<button onclick="connect()">Connect</button>
+<button onclick="enableAlarm()">Enable Alarm</button>
+
+<div id="data"></div>
+
+</div>
+
+<script>
+
+let alarmEnabled = false;
+let currentID = "";
+let alarmInterval = null;
+
+// Enable alarm
+function enableAlarm(){
+    alarmEnabled = true;
+    alert("Alarm Enabled");
+}
+
+// Connect
+function connect(){
+    currentID = document.getElementById("pid").value;
+
+    // Save patient location
+    navigator.geolocation.getCurrentPosition(pos=>{
+        let loc = {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude
+        };
+        localStorage.setItem(currentID+"_loc", JSON.stringify(loc));
+    });
+
+    loadData();
+}
+
+// Format time
+function formatTime(t){
+    let [h,m] = t.split(":");
+    let hour = parseInt(h);
+    let ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12 || 12;
+    return `${hour}:${m} ${ampm}`;
+}
+
+// Load data
+function loadData(){
+    let data = JSON.parse(localStorage.getItem(currentID)) || [];
+    let container = document.getElementById("data");
+    container.innerHTML = "";
+
+    data.forEach((item,index)=>{
+        let div = document.createElement("div");
+        div.className = "card";
+
+        div.innerHTML = `
+        ${item.med} at ${formatTime(item.time)}<br>
+        <b>${item.taken ? "Taken ✅" : "Pending ❌"}</b>
+        `;
+
+        let btn = document.createElement("button");
+        btn.innerText = "Mark Taken";
+
+        btn.onclick = function(){
+            data[index].taken = true;
+            localStorage.setItem(currentID, JSON.stringify(data));
+
+            stopAlarm();
+            loadData();
+        };
+
+        div.appendChild(btn);
+        container.appendChild(div);
+    });
+
+    startAlarm();
+}
+
+// Alarm loop
+function startAlarm(){
+
+    if(alarmInterval) clearInterval(alarmInterval);
+
+    alarmInterval = setInterval(()=>{
+        let data = JSON.parse(localStorage.getItem(currentID)) || [];
+        let now = new Date().toTimeString().slice(0,5);
+
+        data.forEach(item=>{
+            if(item.time === now && !item.taken){
+                triggerAlarm(item.med);
+            }
+        });
+
+    },1000);
+}
+
+// Voice + repeat
+function triggerAlarm(medName){
+
+    if(!alarmEnabled) return;
+    if(window.alarmRunning) return;
+
+    window.alarmRunning = true;
+
+    function repeat(){
+
+        let data = JSON.parse(localStorage.getItem(currentID)) || [];
+        let stillPending = data.some(i => !i.taken && i.med === medName);
+
+        if(!stillPending){
+            stopAlarm();
+            return;
+        }
+
+        // Voice
+        let speech = new SpeechSynthesisUtterance(
+            `Please take your medicine ${medName}`
+        );
+        speech.rate = 0.9;
+
+        window.speechSynthesis.speak(speech);
+
+        // Red flash
+        document.body.style.background = "red";
+        setTimeout(()=>{ document.body.style.background=""; },300);
+
+        setTimeout(repeat, 8000);
+    }
+
+    repeat();
+}
+
+// Stop alarm
+function stopAlarm(){
+    window.speechSynthesis.cancel();
+    window.alarmRunning = false;
+}
+
+</script>
+
+</body>
+</html>

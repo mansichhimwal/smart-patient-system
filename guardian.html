@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Guardian</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+<h2>Guardian Panel</h2>
+
+<button onclick="generateID()">Generate Patient ID</button>
+<h3 id="showID"></h3>
+
+<input id="medicine" placeholder="Medicine Name">
+<input id="time" type="time">
+
+<button onclick="addMedicine()">Add Medicine</button>
+<button onclick="loadData()">Refresh</button>
+
+<div id="weather"></div>
+<div id="list"></div>
+
+</div>
+
+<script>
+
+let currentID = "";
+
+// Generate ID
+function generateID(){
+    currentID = "P" + Math.floor(Math.random()*10000);
+    document.getElementById("showID").innerText = "Patient ID: " + currentID;
+}
+
+// Add medicine
+function addMedicine(){
+    if(currentID === ""){
+        alert("Generate ID first!");
+        return;
+    }
+
+    let med = document.getElementById("medicine").value;
+    let time = document.getElementById("time").value;
+
+    let data = JSON.parse(localStorage.getItem(currentID)) || [];
+
+    data.push({med, time, taken:false});
+
+    localStorage.setItem(currentID, JSON.stringify(data));
+
+    loadData();
+}
+
+// Format time
+function formatTime(t){
+    let [h,m] = t.split(":");
+    let hour = parseInt(h);
+    let ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12 || 12;
+    return `${hour}:${m} ${ampm}`;
+}
+
+// Load data
+function loadData(){
+    let data = JSON.parse(localStorage.getItem(currentID)) || [];
+
+    let list = document.getElementById("list");
+    list.innerHTML = "";
+
+    data.forEach(item=>{
+        let div = document.createElement("div");
+        div.className = "card";
+
+        div.innerHTML = `
+        ${item.med} at ${formatTime(item.time)}<br>
+        <b>Status: ${item.taken ? "Taken ✅" : "Pending ❌"}</b>
+        `;
+
+        list.appendChild(div);
+    });
+
+    loadWeather();
+}
+
+// Weather
+function loadWeather(){
+    let loc = JSON.parse(localStorage.getItem(currentID+"_loc"));
+
+    if(!loc){
+        document.getElementById("weather").innerText =
+        "Waiting for patient location...";
+        return;
+    }
+
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m`)
+    .then(res=>res.json())
+    .then(data=>{
+        document.getElementById("weather").innerHTML =
+        `🌡️ Temp: ${data.current.temperature_2m}°C | 💧 Humidity: ${data.current.relative_humidity_2m}%`;
+    });
+}
+
+</script>
+
+</body>
+</html>
